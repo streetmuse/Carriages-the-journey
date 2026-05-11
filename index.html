@@ -1,0 +1,1428 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Carriages Tickenham — All Aboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400;1,600&family=Lora:ital,wght@0,400;0,500;1,400&family=IM+Fell+English+SC&display=swap" rel="stylesheet">
+<style>
+  /* =================================================================
+     Carriages Tickenham — The Journey
+     A horizontal-scroll experience. Scroll, drag, or arrow-key to ride.
+     ================================================================= */
+
+  :root {
+    --burgundy: #5C1A1A;
+    --burgundy-light: #7A2525;
+    --burgundy-deep: #3D1010;
+    --burgundy-shadow: #260808;
+    --ivory: #FAF6EF;
+    --cream: #F2E8D5;
+    --brass: #9A7230;
+    --brass-light: #C4963E;
+    --brass-deep: #6B4F1F;
+    --forest: #2D4735;
+    --forest-deep: #1F3027;
+    --charcoal: #2A2520;
+    --warm-gray: #8C7E70;
+    --light-border: #DDD0B8;
+    --sky-top: #E6CFA8;     /* warm late-afternoon sky */
+    --sky-mid: #D9A776;
+    --sky-low: #B57250;
+    --hill-far: #5C5040;
+    --hill-mid: #3A332A;
+    --hill-near: #221E18;
+    --rail-tie: #4A3A28;
+    --rail-steel: #8B7C68;
+  }
+
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html, body {
+    width: 100vw; height: 100vh;
+    overflow: hidden;
+    background: var(--burgundy-shadow);
+    font-family: 'Lora', Georgia, serif;
+    color: var(--charcoal);
+    overscroll-behavior: none;
+    touch-action: none;
+    cursor: grab;
+  }
+  html.dragging, body.dragging { cursor: grabbing; }
+
+  /* ---------- SCENE STACK ---------- */
+  .scene {
+    position: fixed; inset: 0;
+    background: linear-gradient(180deg,
+      var(--sky-top) 0%, var(--sky-mid) 35%, var(--sky-low) 58%,
+      #6E4838 65%, #3F2A1F 78%, #1F1612 100%);
+  }
+  .layer { position: absolute; left: 0; top: 0; will-change: transform; }
+
+  /* --- Sky details --- */
+  .sun {
+    position: absolute;
+    top: 10%; left: 70%;
+    width: 180px; height: 180px;
+    border-radius: 50%;
+    background: radial-gradient(circle, #F6D9A3 0%, #E8B97A 45%, rgba(232,185,122,0) 70%);
+    filter: blur(2px);
+  }
+  /* --- Smoke / cloud puffs --- */
+  @keyframes smokeDrift {
+    0%   { transform: translate(0, 0) scale(1);    opacity: var(--smoke-start-opacity); }
+    40%  { transform: translate(12px, -8px) scale(1.04); }
+    100% { transform: translate(28px, -18px) scale(1.09); opacity: var(--smoke-end-opacity); }
+  }
+  @keyframes smokeSway {
+    0%,100% { transform: translateX(0) scaleX(1); }
+    50%      { transform: translateX(10px) scaleX(1.03); }
+  }
+
+  .cloud {
+    position: absolute;
+    --smoke-start-opacity: 1;
+    --smoke-end-opacity: 0.75;
+    animation: smokeDrift 18s ease-in-out infinite alternate,
+               smokeSway  22s ease-in-out infinite alternate;
+  }
+
+  /* Each cloud is built from overlapping radial-gradient blobs */
+  .cloud::before,
+  .cloud::after,
+  .cloud .p1,
+  .cloud .p2,
+  .cloud .p3 {
+    content: '';
+    position: absolute;
+    border-radius: 50%;
+    background: radial-gradient(circle at 40% 45%,
+      rgba(255,248,235, 0.72) 0%,
+      rgba(250,238,210, 0.48) 38%,
+      rgba(240,220,185, 0.22) 62%,
+      transparent 80%);
+    filter: blur(7px);
+  }
+
+  /* Blob sizes and positions per cloud — layered for depth */
+  .cloud.c1 { width: 0; height: 0; top: 17%; left: 6%; }
+  .cloud.c1::before { width: 210px; height: 90px;  top: 0;    left: 0; }
+  .cloud.c1::after  { width: 160px; height: 70px;  top: -22px; left: 80px; filter: blur(9px); }
+  .cloud.c1 .p1     { width: 130px; height: 60px;  top: 8px;  left: 140px; filter: blur(6px); opacity: 0.85; }
+  .cloud.c1 .p2     { width: 100px; height: 50px;  top: -10px; left: 50px; filter: blur(11px); opacity: 0.6; }
+  .cloud.c1 .p3     { width: 80px;  height: 40px;  top: 20px; left: 190px; filter: blur(8px); opacity: 0.5; }
+
+  .cloud.c2 { width: 0; height: 0; top: 10%; left: 38%; --smoke-start-opacity: 0.85; animation-delay: -5s, -3s; }
+  .cloud.c2::before { width: 260px; height: 80px;  top: 0;    left: 0; filter: blur(10px); }
+  .cloud.c2::after  { width: 180px; height: 65px;  top: -20px; left: 60px; filter: blur(8px); }
+  .cloud.c2 .p1     { width: 140px; height: 55px;  top: 6px;  left: 160px; filter: blur(7px); opacity: 0.7; }
+  .cloud.c2 .p2     { width: 110px; height: 50px;  top: -14px; left: 30px; filter: blur(12px); opacity: 0.55; }
+  .cloud.c2 .p3     { width: 90px;  height: 38px;  top: 15px; left: 210px; filter: blur(9px); opacity: 0.45; }
+
+  .cloud.c3 { width: 0; height: 0; top: 22%; left: 76%; --smoke-start-opacity: 0.9; animation-delay: -9s, -7s; }
+  .cloud.c3::before { width: 170px; height: 72px;  top: 0;    left: 0; }
+  .cloud.c3::after  { width: 130px; height: 58px;  top: -16px; left: 55px; filter: blur(9px); }
+  .cloud.c3 .p1     { width: 110px; height: 48px;  top: 5px;  left: 110px; filter: blur(7px); opacity: 0.75; }
+  .cloud.c3 .p2     { width: 85px;  height: 42px;  top: -12px; left: 22px; filter: blur(11px); opacity: 0.5; }
+  .cloud.c3 .p3     { width: 70px;  height: 32px;  top: 18px; left: 140px; filter: blur(8px); opacity: 0.4; }
+
+  .cloud.c4 { width: 0; height: 0; top: 7%;  left: 90%; --smoke-start-opacity: 0.8; animation-delay: -13s, -11s; }
+  .cloud.c4::before { width: 240px; height: 88px;  top: 0;    left: 0; filter: blur(11px); }
+  .cloud.c4::after  { width: 170px; height: 68px;  top: -22px; left: 70px; filter: blur(8px); }
+  .cloud.c4 .p1     { width: 130px; height: 54px;  top: 8px;  left: 150px; filter: blur(7px); opacity: 0.7; }
+  .cloud.c4 .p2     { width: 100px; height: 46px;  top: -15px; left: 35px; filter: blur(13px); opacity: 0.5; }
+  .cloud.c4 .p3     { width: 82px;  height: 36px;  top: 22px; left: 190px; filter: blur(9px); opacity: 0.42; }
+
+  .cloud.c5 { width: 0; height: 0; top: 20%; left: 128%; animation-delay: -6s, -14s; }
+  .cloud.c5::before { width: 155px; height: 66px;  top: 0;    left: 0; }
+  .cloud.c5::after  { width: 120px; height: 52px;  top: -18px; left: 50px; filter: blur(9px); }
+  .cloud.c5 .p1     { width: 100px; height: 44px;  top: 7px;  left: 100px; filter: blur(7px); opacity: 0.7; }
+  .cloud.c5 .p2     { width: 78px;  height: 38px;  top: -10px; left: 20px; filter: blur(11px); opacity: 0.5; }
+  .cloud.c5 .p3     { width: 65px;  height: 30px;  top: 16px; left: 128px; filter: blur(8px); opacity: 0.38; }
+
+  .cloud.c6 { width: 0; height: 0; top: 14%; left: 158%; animation-delay: -2s, -18s; --smoke-end-opacity: 0.65; }
+  .cloud.c6::before { width: 220px; height: 82px;  top: 0;    left: 0; filter: blur(10px); }
+  .cloud.c6::after  { width: 160px; height: 64px;  top: -20px; left: 62px; filter: blur(8px); }
+  .cloud.c6 .p1     { width: 125px; height: 52px;  top: 6px;  left: 145px; filter: blur(7px); opacity: 0.72; }
+  .cloud.c6 .p2     { width: 95px;  height: 44px;  top: -12px; left: 28px; filter: blur(12px); opacity: 0.52; }
+  .cloud.c6 .p3     { width: 75px;  height: 34px;  top: 20px; left: 180px; filter: blur(9px); opacity: 0.4; }
+
+  /* star-pole removed */
+
+  /* --- Distant hills --- */
+  .hills {
+    width: 400%;
+    bottom: 24%;
+    top: auto;
+    height: 30%;
+  }
+  .hills svg { display: block; width: 100%; height: 100%; }
+
+  /* --- Mid-ground fields/trees --- */
+  .fields {
+    width: 400%;
+    bottom: 18%;
+    top: auto;
+    height: 14%;
+  }
+  .fields svg { display: block; width: 100%; height: 100%; }
+
+  /* --- Ground / track-bed --- */
+  .ground {
+    width: 400%;
+    bottom: 0;
+    top: auto;
+    height: 22%;
+    background: linear-gradient(180deg, #4A3823 0%, #2E2114 70%, #1B130B 100%);
+  }
+  .ground::before {
+    content: '';
+    position: absolute; top: -2px; left: 0; right: 0; height: 4px;
+    background: linear-gradient(180deg, #6B4F2A 0%, transparent 100%);
+  }
+
+  /* --- Ties (sleepers) and rails --- */
+  .tracks {
+    width: 400%;
+    bottom: 4%;
+    top: auto;
+    height: 26px;
+  }
+  .tie {
+    position: absolute; bottom: 0;
+    width: 60px; height: 14px;
+    background: linear-gradient(180deg, var(--rail-tie), #2E2418);
+    border-radius: 2px;
+    box-shadow: 0 2px 0 rgba(0,0,0,0.4);
+  }
+  .rail {
+    position: absolute; left: 0; right: 0;
+    height: 3px;
+    background: linear-gradient(180deg, var(--rail-steel), #5A4F3D);
+    box-shadow: 0 1px 0 rgba(0,0,0,0.5);
+  }
+  .rail.top { bottom: 16px; }
+  .rail.bot { bottom: 9px; }
+
+  /* --- Foreground grass blades zipping by --- */
+  .foreground {
+    width: 400%;
+    bottom: 0;
+    top: auto;
+    height: 14%;
+    pointer-events: none;
+  }
+  .blade {
+    position: absolute; bottom: 0;
+    width: 3px; height: 18px;
+    background: linear-gradient(180deg, var(--forest-deep), transparent);
+    transform: skewX(-12deg);
+    opacity: 0.7;
+  }
+  .post {
+    position: absolute; bottom: 12%;
+    width: 6px; height: 130px;
+    background: linear-gradient(180deg, #1A1410 0%, #0E0A07 100%);
+  }
+  .post::before {
+    content: ''; position: absolute; top: -8px; left: -10px;
+    width: 26px; height: 14px; background: #1A1410;
+    border-radius: 4px 4px 0 0;
+  }
+  .post .lamp {
+    position: absolute; top: 8px; left: -4px;
+    width: 14px; height: 14px;
+    background: radial-gradient(circle, #F6D9A3 0%, var(--brass) 70%, transparent 80%);
+    border-radius: 50%;
+  }
+
+  /* ===================  THE TRAIN  =================== */
+  .train {
+    position: absolute;
+    bottom: 11%;
+    top: auto;
+    height: 56vh;
+    min-height: 460px;
+    max-height: 620px;
+    display: flex;
+    align-items: flex-end;
+    gap: 18px;
+    padding: 0 0 0 0;
+    filter: drop-shadow(0 12px 14px rgba(0,0,0,0.35));
+  }
+
+  /* --- Steam billow --- */
+  .steam {
+    position: absolute;
+    top: -50px; left: 80px;
+    pointer-events: none;
+  }
+  .puff {
+    position: absolute;
+    width: 80px; height: 80px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(250,246,239,0.85), rgba(250,246,239,0.0));
+    animation: puff 4s ease-out infinite;
+  }
+  .puff:nth-child(1) { left: 0;  top: 0;  animation-delay: 0s; }
+  .puff:nth-child(2) { left: 40px; top: -20px; animation-delay: 0.8s; width: 100px; height: 100px; }
+  .puff:nth-child(3) { left: 90px; top: -50px; animation-delay: 1.6s; width: 120px; height: 120px; }
+  .puff:nth-child(4) { left: 150px; top: -90px; animation-delay: 2.4s; width: 130px; height: 130px; }
+  .puff:nth-child(5) { left: 220px; top: -130px; animation-delay: 3.2s; width: 110px; height: 110px; }
+  @keyframes puff {
+    0%   { transform: translate(0, 0) scale(0.5); opacity: 0.0; }
+    20%  { opacity: 0.9; }
+    100% { transform: translate(40px, -80px) scale(1.4); opacity: 0; }
+  }
+
+  /* --- Locomotive --- */
+  .loco {
+    position: relative;
+    width: 460px;
+    height: 78%;
+    flex-shrink: 0;
+    display: flex;
+    align-items: flex-end;
+  }
+  .loco-body {
+    width: 100%;
+    height: 100%;
+    position: relative;
+    background:
+      linear-gradient(180deg, var(--burgundy-light) 0%, var(--burgundy) 40%, var(--burgundy-deep) 100%);
+    border: 3px solid var(--brass);
+    border-radius: 8px 36px 4px 4px;
+    box-shadow: inset 0 0 0 2px var(--burgundy-shadow);
+  }
+  .loco-cabin {
+    position: absolute; top: 8%; left: 6%;
+    width: 38%; height: 58%;
+    background: linear-gradient(180deg, var(--burgundy-deep), var(--burgundy));
+    border: 2px solid var(--brass);
+    border-radius: 18px 18px 4px 4px;
+  }
+  .loco-cabin-window {
+    position: absolute; top: 18%; left: 18%; right: 18%; bottom: 30%;
+    background: linear-gradient(160deg, var(--cream) 0%, var(--brass-light) 70%);
+    border: 2px solid var(--brass-light);
+    border-radius: 10px 10px 2px 2px;
+    opacity: 0.85;
+  }
+  .loco-boiler {
+    position: absolute; top: 18%; left: 46%; right: 4%; height: 56%;
+    background: linear-gradient(180deg, var(--burgundy) 0%, var(--burgundy-deep) 100%);
+    border: 2px solid var(--brass);
+    border-radius: 999px 999px 999px 999px;
+  }
+  .loco-boiler::before { /* rivet rings */
+    content: ''; position: absolute; inset: 0;
+    background:
+      linear-gradient(90deg, var(--brass) 0 2px, transparent 2px 25%),
+      linear-gradient(90deg, transparent 50%, var(--brass) 50% calc(50% + 2px), transparent calc(50% + 2px)),
+      linear-gradient(90deg, transparent calc(100% - 2px), var(--brass) calc(100% - 2px) 100%);
+    background-size: 100% 100%;
+    opacity: 0.5;
+    border-radius: inherit;
+  }
+  .loco-chimney {
+    position: absolute; top: -12%; left: 56%;
+    width: 14%; height: 30%;
+    background: linear-gradient(180deg, var(--charcoal), var(--burgundy-shadow));
+    border: 2px solid var(--brass-deep);
+    border-radius: 4px 4px 2px 2px;
+  }
+  .loco-chimney::after {
+    content: ''; position: absolute; top: -8px; left: -6px; right: -6px; height: 10px;
+    background: var(--brass);
+    border-radius: 2px;
+  }
+  .loco-dome {
+    position: absolute; top: -2%; left: 78%;
+    width: 11%; height: 18%;
+    background: radial-gradient(ellipse at center top, var(--brass-light), var(--brass-deep));
+    border: 2px solid var(--brass-deep);
+    border-radius: 999px 999px 4px 4px;
+  }
+  .loco-headlight {
+    position: absolute; top: 40%; right: 1%;
+    width: 28px; height: 28px;
+    background: radial-gradient(circle, #FFF4D0 0%, var(--brass-light) 50%, var(--brass-deep) 100%);
+    border: 2px solid var(--brass-deep);
+    border-radius: 50%;
+    box-shadow: 0 0 30px rgba(246,217,163,0.6), inset 0 0 6px rgba(0,0,0,0.3);
+  }
+  .loco-bumper {
+    position: absolute; right: -10px; top: 50%; transform: translateY(-50%);
+    width: 14px; height: 64%;
+    background: linear-gradient(180deg, var(--brass), var(--brass-deep));
+    border-radius: 4px;
+  }
+  .loco-cowcatcher {
+    position: absolute; right: -32px; bottom: 0;
+    width: 50px; height: 60%;
+    background:
+      repeating-linear-gradient(108deg,
+        var(--brass-deep) 0 4px,
+        var(--charcoal) 4px 10px);
+    clip-path: polygon(0 0, 100% 60%, 100% 100%, 0 100%);
+  }
+  .loco-nameplate {
+    position: absolute; top: 60%; left: 6%;
+    background: var(--brass);
+    color: var(--burgundy-deep);
+    font-family: 'IM Fell English SC', serif;
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    padding: 4px 10px;
+    border-radius: 2px;
+    border: 1px solid var(--brass-deep);
+  }
+
+  /* --- Coupler between cars --- */
+  .coupler {
+    width: 18px;
+    height: 24px;
+    align-self: center;
+    margin-bottom: 60px;
+    background: linear-gradient(180deg, var(--brass), var(--brass-deep));
+    border-radius: 4px;
+    position: relative;
+    flex-shrink: 0;
+  }
+  .coupler::before, .coupler::after {
+    content: ''; position: absolute; top: 50%; height: 4px;
+    background: var(--brass-deep); transform: translateY(-50%);
+  }
+  .coupler::before { left: -10px; width: 14px; }
+  .coupler::after { right: -10px; width: 14px; }
+
+  /* --- Carriage / coach --- */
+  .car {
+    position: relative;
+    width: 880px;
+    height: 80%;
+    flex-shrink: 0;
+    background: linear-gradient(180deg, var(--burgundy-light) 0%, var(--burgundy) 35%, var(--burgundy-deep) 100%);
+    border: 3px solid var(--brass);
+    border-radius: 14px 14px 4px 4px;
+    box-shadow:
+      inset 0 0 0 2px var(--burgundy-shadow),
+      inset 0 14px 0 -10px rgba(154,114,48,0.25);
+  }
+  .car::before { /* roof line */
+    content: ''; position: absolute; top: -10px; left: 4%; right: 4%; height: 14px;
+    background: linear-gradient(180deg, var(--charcoal), var(--burgundy-shadow));
+    border-radius: 8px 8px 0 0;
+    border: 2px solid var(--brass-deep);
+  }
+  .car::after { /* brass underside trim */
+    content: ''; position: absolute; bottom: -3px; left: 4%; right: 4%; height: 8px;
+    background: linear-gradient(180deg, var(--brass), var(--brass-deep));
+    border-radius: 0 0 4px 4px;
+  }
+  .car-number {
+    position: absolute;
+    top: 12px; left: 14px;
+    background: var(--brass);
+    color: var(--burgundy-deep);
+    font-family: 'IM Fell English SC', serif;
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    padding: 3px 8px;
+    border-radius: 2px;
+    z-index: 2;
+  }
+  .car-section-tag {
+    position: absolute;
+    top: 12px; right: 14px;
+    font-family: 'IM Fell English SC', serif;
+    font-size: 11px;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    color: var(--brass-light);
+    z-index: 2;
+  }
+
+  /* --- The viewing window — a big "picture frame" cut into the car --- */
+  .window {
+    position: absolute;
+    top: 40px;
+    left: 50px;
+    right: 50px;
+    bottom: 60px;
+    background: linear-gradient(160deg, #FFFCF5 0%, var(--ivory) 50%, var(--cream) 100%);
+    border: 3px solid var(--brass);
+    border-radius: 36px 36px 6px 6px;
+    box-shadow:
+      inset 0 0 0 2px rgba(154,114,48,0.4),
+      inset 0 18px 24px rgba(154,114,48,0.18);
+    overflow: hidden;
+  }
+  .window::before { /* mullion removed — was splitting content */
+    content: none;
+  }
+  .window::after { /* glass reflection */
+    content: ''; position: absolute; inset: 0;
+    background:
+      linear-gradient(110deg, rgba(255,255,255,0.45) 0%, rgba(255,255,255,0.0) 28%, rgba(255,255,255,0.0) 70%, rgba(255,255,255,0.12) 100%);
+    pointer-events: none;
+    z-index: 4;
+  }
+  .window-content {
+    position: relative;
+    width: 100%; height: 100%;
+    padding: 28px 36px;
+    display: flex;
+    z-index: 2;
+  }
+
+  /* --- Wheels --- */
+  .wheels {
+    position: absolute;
+    bottom: -42px; left: 6%; right: 6%;
+    display: flex; justify-content: space-between;
+    z-index: 1;
+  }
+  .wheel {
+    width: 60px; height: 60px;
+    border-radius: 50%;
+    background: radial-gradient(circle, var(--brass-light) 0%, var(--brass) 30%, var(--brass-deep) 70%, var(--charcoal) 100%);
+    border: 3px solid var(--charcoal);
+    position: relative;
+    box-shadow: inset 0 0 0 3px var(--brass-deep), 0 4px 0 rgba(0,0,0,0.4);
+  }
+  .wheel::before { /* hub */
+    content: ''; position: absolute; inset: 35%;
+    background: var(--charcoal);
+    border-radius: 50%;
+    border: 2px solid var(--brass-deep);
+  }
+  .wheel::after { /* spokes — animated */
+    content: ''; position: absolute; inset: 12%;
+    background:
+      conic-gradient(from 0deg,
+        transparent 0deg, transparent 18deg,
+        rgba(0,0,0,0.55) 18deg, rgba(0,0,0,0.55) 22deg,
+        transparent 22deg, transparent 68deg,
+        rgba(0,0,0,0.55) 68deg, rgba(0,0,0,0.55) 72deg,
+        transparent 72deg, transparent 118deg,
+        rgba(0,0,0,0.55) 118deg, rgba(0,0,0,0.55) 122deg,
+        transparent 122deg, transparent 168deg,
+        rgba(0,0,0,0.55) 168deg, rgba(0,0,0,0.55) 172deg,
+        transparent 172deg);
+    border-radius: 50%;
+    transform-origin: center;
+  }
+  .loco .wheel { width: 76px; height: 76px; }
+  .loco .wheel.big { width: 100px; height: 100px; }
+
+  /* --- End / caboose --- */
+  .caboose {
+    position: relative;
+    width: 260px;
+    height: 72%;
+    flex-shrink: 0;
+    background: linear-gradient(180deg, var(--burgundy-light), var(--burgundy-deep));
+    border: 3px solid var(--brass);
+    border-radius: 4px 8px 4px 4px;
+    box-shadow: inset 0 0 0 2px var(--burgundy-shadow);
+  }
+  .caboose::before {
+    content: ''; position: absolute; top: -10px; left: 6%; right: 6%; height: 12px;
+    background: linear-gradient(180deg, var(--charcoal), var(--burgundy-shadow));
+    border-radius: 6px 6px 0 0;
+    border: 2px solid var(--brass-deep);
+  }
+  .caboose-window {
+    position: absolute; top: 22%; left: 18%; right: 18%; height: 36%;
+    background: linear-gradient(160deg, #FFFCF5, var(--cream));
+    border: 2px solid var(--brass);
+    border-radius: 18px 18px 4px 4px;
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Playfair Display', serif;
+    font-style: italic;
+    color: var(--burgundy-deep);
+    font-size: 14px;
+  }
+  .caboose-lantern {
+    position: absolute; bottom: 18%; right: 12%;
+    width: 18px; height: 22px;
+    background: radial-gradient(ellipse at center, #F6D9A3, var(--brass));
+    border: 1.5px solid var(--brass-deep);
+    border-radius: 3px;
+    box-shadow: 0 0 14px rgba(246,217,163,0.7);
+  }
+  .caboose-tag {
+    position: absolute; top: 8%; left: 50%; transform: translateX(-50%);
+    font-family: 'IM Fell English SC', serif;
+    font-size: 9px; letter-spacing: 0.2em; color: var(--brass-light);
+    text-transform: uppercase;
+  }
+
+  /* ===================  IN-WINDOW CONTENT  =================== */
+  /* Each compartment expresses one piece of the brand. */
+
+  .eyebrow {
+    font-family: 'IM Fell English SC', serif;
+    font-size: 0.72rem;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    color: var(--brass);
+    display: flex; align-items: center; gap: 0.6rem;
+  }
+  .eyebrow::after { content: ''; display: block; width: 28px; height: 1px; background: var(--brass); }
+
+  .display {
+    font-family: 'Playfair Display', serif;
+    font-weight: 700;
+    color: var(--burgundy-deep);
+    line-height: 1.05;
+    letter-spacing: -0.01em;
+  }
+  .display em { font-style: italic; color: var(--burgundy); display: block; }
+
+  .body {
+    font-family: 'Lora', serif;
+    color: var(--warm-gray);
+    line-height: 1.7;
+  }
+
+  .price-row {
+    display: flex; justify-content: space-between;
+    font-family: 'Lora', serif;
+    font-size: 13px;
+    color: var(--charcoal);
+    padding: 4px 0;
+    border-bottom: 1px dotted var(--light-border);
+  }
+  .price-row:last-child { border-bottom: none; }
+  .price-row span { color: var(--brass); font-weight: 500; }
+
+  /* Per-compartment layouts */
+  .c-welcome { flex-direction: column; justify-content: center; align-items: center; text-align: center; gap: 12px; padding: 30px; }
+  .c-welcome .eyebrow { justify-content: center; }
+  .c-welcome .eyebrow::before { content: ''; display: block; width: 28px; height: 1px; background: var(--brass); }
+  .c-welcome .display { font-size: 44px; }
+  .c-welcome .body { font-size: 15px; font-style: italic; max-width: 480px; }
+  .c-welcome .stamp {
+    margin-top: 14px;
+    border: 2px solid var(--brass);
+    color: var(--brass-deep);
+    font-family: 'IM Fell English SC', serif;
+    letter-spacing: 0.2em;
+    font-size: 12px;
+    padding: 8px 18px;
+    border-radius: 999px;
+    text-transform: uppercase;
+    transform: rotate(-3deg);
+    box-shadow: inset 0 0 0 4px rgba(154,114,48,0.08);
+  }
+
+  .c-story { gap: 28px; padding: 22px 30px; align-items: center; }
+  .c-story .left { flex: 1.2; display: flex; flex-direction: column; gap: 12px; }
+  .c-story .display { font-size: 36px; }
+  .c-story .body { font-size: 14px; }
+  .c-story .tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+  .c-story .tag {
+    font-family: 'Lora', serif; font-size: 11px; letter-spacing: 0.06em;
+    color: var(--burgundy); border: 1px solid var(--light-border);
+    padding: 3px 9px; border-radius: 2px; background: rgba(242,232,213,0.5);
+  }
+  .c-story .right {
+    flex: 1; align-self: stretch;
+    background: var(--burgundy-deep);
+    border-radius: 6px;
+    padding: 20px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 14px;
+    color: var(--cream);
+    position: relative;
+    overflow: hidden;
+  }
+  .c-story .right::before {
+    content: ''; position: absolute; inset: 0;
+    background: repeating-linear-gradient(90deg, transparent 0 22px, rgba(154,114,48,0.06) 22px 23px);
+  }
+  .c-story .mini-carriage { width: 80%; position: relative; z-index: 1; }
+  .c-story .mini-body {
+    background: rgba(154,114,48,0.15);
+    border: 1.5px solid var(--brass);
+    border-radius: 6px 6px 2px 2px;
+    padding: 14px 18px 10px;
+    display: flex; gap: 8px; justify-content: center;
+  }
+  .c-story .mini-window { width: 24px; height: 18px; border: 1px solid var(--brass); border-radius: 10px 10px 1px 1px; background: rgba(154,114,48,0.1); }
+  .c-story .mini-wheels { display: flex; justify-content: space-around; padding: 0 8px; margin-top: 4px; }
+  .c-story .mini-wheel { width: 12px; height: 12px; border-radius: 50%; border: 1.5px solid var(--brass); background: rgba(154,114,48,0.1); }
+  .c-story .quote {
+    font-family: 'Playfair Display', serif; font-style: italic;
+    color: var(--brass-light); font-size: 12px; text-align: center;
+    line-height: 1.5; position: relative; z-index: 1;
+  }
+
+  .c-menu { padding: 18px 24px; flex-direction: column; gap: 8px; }
+  .c-menu .head { display: flex; justify-content: space-between; align-items: flex-end; }
+  .c-menu .display { font-size: 28px; }
+  .c-menu .head .body { font-size: 12px; font-style: italic; max-width: 260px; text-align: right; }
+  .c-menu .grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1.5px; background: var(--light-border); border: 1.5px solid var(--light-border); flex: 1; }
+  .c-menu .tile { background: var(--ivory); padding: 9px 12px; display: flex; flex-direction: column; gap: 3px; }
+  .c-menu .tile .glyph {
+    font-family: 'Playfair Display', serif; font-style: italic;
+    color: var(--brass); font-size: 18px;
+  }
+  .c-menu .tile h4 {
+    font-family: 'Playfair Display', serif; font-weight: 600;
+    color: var(--burgundy-deep); font-size: 13px; line-height: 1.2;
+  }
+  .c-menu .tile .body { font-size: 10.5px; line-height: 1.45; flex: 1; }
+  .c-menu .tile .from {
+    font-family: 'Playfair Display', serif; font-size: 14px;
+    font-weight: 600; color: var(--brass); letter-spacing: 0.04em;
+  }
+
+  .c-roast { padding: 22px 30px; gap: 22px; align-items: stretch; }
+  .c-roast .left { flex: 1; display: flex; flex-direction: column; gap: 10px; justify-content: center; }
+  .c-roast .display { font-size: 32px; }
+  .c-roast .body { font-size: 13px; }
+  .c-roast .right { flex: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--brass); padding: 1px; align-self: stretch; }
+  .c-roast .right .cell {
+    background: var(--cream); padding: 14px 16px;
+    display: flex; flex-direction: column; gap: 4px;
+  }
+  .c-roast .right .cell .lbl {
+    font-family: 'IM Fell English SC', serif; font-size: 10px;
+    letter-spacing: 0.2em; color: var(--brass); text-transform: uppercase;
+  }
+  .c-roast .right .cell .val {
+    font-family: 'Playfair Display', serif; font-style: italic;
+    color: var(--burgundy-deep); font-size: 18px;
+  }
+
+  .c-reviews { padding: 20px 28px; flex-direction: column; gap: 10px; }
+  .c-reviews .head { display: flex; justify-content: space-between; align-items: baseline; }
+  .c-reviews .display { font-size: 26px; }
+  .c-reviews .score { font-family: 'Playfair Display', serif; font-weight: 700; font-size: 36px; color: var(--brass); }
+  .c-reviews .score small { font-family: 'IM Fell English SC', serif; font-size: 10px; letter-spacing: 0.2em; color: var(--warm-gray); text-transform: uppercase; display: block; }
+  .c-reviews .cards { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; flex: 1; }
+  .c-reviews .card {
+    background: var(--cream); border: 1px solid var(--light-border);
+    border-top: 3px solid var(--brass);
+    padding: 9px 12px; border-radius: 2px;
+    display: flex; flex-direction: column; gap: 5px;
+  }
+  .c-reviews .stars { color: var(--brass); letter-spacing: 0.1em; font-size: 11px; }
+  .c-reviews .quote {
+    font-family: 'Lora', serif; font-style: italic;
+    font-size: 12px; line-height: 1.55; color: var(--charcoal); flex: 1;
+  }
+  .c-reviews .author {
+    font-family: 'IM Fell English SC', serif; font-size: 9px;
+    letter-spacing: 0.15em; color: var(--warm-gray); text-transform: uppercase;
+  }
+
+  .c-visit { padding: 20px 28px; gap: 18px; align-items: stretch; }
+  .c-visit .left { flex: 1; display: flex; flex-direction: column; gap: 10px; justify-content: center; }
+  .c-visit .display { font-size: 26px; }
+  .c-visit .hours { display: flex; flex-direction: column; gap: 0; margin-top: 6px; }
+  .c-visit .hours .row {
+    display: flex; justify-content: space-between;
+    font-family: 'Lora', serif; font-size: 12px; padding: 3px 0;
+    color: var(--charcoal); border-bottom: 1px dotted var(--light-border);
+  }
+  .c-visit .hours .row span { color: var(--warm-gray); }
+  .c-visit .right {
+    flex: 1; background: var(--burgundy-deep); border-radius: 6px;
+    padding: 22px; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    color: var(--cream); text-align: center; gap: 10px;
+  }
+  .c-visit .right .label {
+    font-family: 'IM Fell English SC', serif; font-size: 10px;
+    letter-spacing: 0.25em; color: var(--brass-light); text-transform: uppercase;
+  }
+  .c-visit .right .num {
+    font-family: 'Playfair Display', serif; font-style: italic;
+    font-size: 22px;
+  }
+  .c-visit .right .addr {
+    font-family: 'Lora', serif; font-size: 12px;
+    color: rgba(242,232,213,0.65); line-height: 1.55;
+  }
+  .c-visit .right .btn {
+    margin-top: 6px;
+    background: var(--brass); color: var(--ivory);
+    font-family: 'Lora', serif; font-size: 11px; letter-spacing: 0.15em;
+    text-transform: uppercase;
+    padding: 8px 16px; border-radius: 2px; text-decoration: none;
+    cursor: pointer; transition: background 0.2s;
+  }
+  .c-visit .right .btn:hover { background: var(--brass-light); }
+
+  /* ===================  CHROME  =================== */
+  .brand {
+    position: fixed; top: 22px; left: 32px; z-index: 100;
+    font-family: 'Playfair Display', serif; font-weight: 700;
+    font-size: 14px; letter-spacing: 0.18em; text-transform: uppercase;
+    color: var(--cream);
+    text-shadow: 0 2px 6px rgba(0,0,0,0.45);
+  }
+  .brand span { color: var(--brass-light); }
+
+  .meta {
+    position: fixed; top: 24px; right: 32px; z-index: 100;
+    font-family: 'IM Fell English SC', serif; font-size: 11px;
+    letter-spacing: 0.25em; text-transform: uppercase;
+    color: rgba(250,246,239,0.7); display: flex; gap: 14px; align-items: center;
+    text-shadow: 0 1px 4px rgba(0,0,0,0.5);
+  }
+  .meta .dot { display: block; width: 4px; height: 4px; background: var(--brass-light); border-radius: 50%; }
+
+  .hint {
+    position: fixed; left: 50%; bottom: 60px; transform: translateX(-50%);
+    z-index: 100; display: flex; align-items: center; gap: 14px;
+    font-family: 'IM Fell English SC', serif; font-size: 12px;
+    letter-spacing: 0.32em; text-transform: uppercase;
+    color: rgba(250,246,239,0.85);
+    text-shadow: 0 1px 4px rgba(0,0,0,0.5);
+    transition: opacity 0.4s ease;
+  }
+  .hint.hidden { opacity: 0; pointer-events: none; }
+  .hint .arrow {
+    width: 24px; height: 1px;
+    background: var(--brass-light);
+    position: relative;
+    animation: arrow 2.4s ease-in-out infinite;
+  }
+  .hint .arrow::after {
+    content: ''; position: absolute; right: -1px; top: -3px;
+    width: 8px; height: 8px;
+    border-right: 1px solid var(--brass-light);
+    border-top: 1px solid var(--brass-light);
+    transform: rotate(45deg);
+  }
+  @keyframes arrow {
+    0%, 100% { transform: translateX(0); opacity: 1; }
+    50% { transform: translateX(8px); opacity: 0.5; }
+  }
+
+  /* Progress track */
+  .progress {
+    position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%);
+    width: min(420px, 60vw);
+    z-index: 100;
+    display: flex; align-items: center; gap: 14px;
+  }
+  .progress-line {
+    flex: 1; height: 6px; position: relative;
+    background: repeating-linear-gradient(90deg, var(--brass) 0 14px, transparent 14px 22px);
+    opacity: 0.55;
+    border-radius: 999px;
+  }
+  .progress-marker {
+    position: absolute; top: 50%; left: 0%; transform: translate(-50%, -50%);
+    width: 26px; height: 14px;
+    background: var(--brass-light);
+    border: 1.5px solid var(--burgundy-deep);
+    border-radius: 3px 3px 1px 1px;
+    box-shadow: 0 0 0 2px var(--burgundy-shadow);
+    transition: left 0.05s linear;
+  }
+  .progress-marker::before {
+    content: ''; position: absolute; inset: 2px 6px 6px;
+    background: rgba(255,255,255,0.5); border-radius: 2px 2px 0 0;
+  }
+  .progress-label {
+    font-family: 'IM Fell English SC', serif;
+    font-size: 10px; letter-spacing: 0.25em; text-transform: uppercase;
+    color: rgba(250,246,239,0.8);
+    text-shadow: 0 1px 3px rgba(0,0,0,0.5);
+    min-width: 96px;
+    text-align: left;
+  }
+
+  /* End-of-journey card slides in from the right */
+  .arrival {
+    position: fixed;
+    top: 50%; right: 60px;
+    transform: translate(120%, -50%);
+    z-index: 90;
+    width: 320px;
+    background: var(--cream);
+    border: 2px solid var(--brass);
+    box-shadow: 0 30px 60px rgba(0,0,0,0.4);
+    padding: 24px 28px;
+    display: flex; flex-direction: column; gap: 10px;
+    transition: transform 0.6s cubic-bezier(.2,.7,.2,1);
+  }
+  .arrival.shown { transform: translate(0, -50%); }
+  .arrival .eyebrow { font-size: 0.7rem; }
+  .arrival h3 { font-family: 'Playfair Display', serif; font-weight: 700; color: var(--burgundy-deep); font-size: 22px; line-height: 1.15; }
+  .arrival h3 em { font-style: italic; color: var(--burgundy); display: block; }
+  .arrival p { font-family: 'Lora', serif; font-size: 13px; color: var(--warm-gray); line-height: 1.6; }
+  .arrival a {
+    align-self: flex-start; margin-top: 8px;
+    background: var(--brass); color: var(--ivory);
+    font-family: 'Lora', serif; font-size: 12px; letter-spacing: 0.12em;
+    text-transform: uppercase; text-decoration: none;
+    padding: 9px 18px; border-radius: 2px;
+    transition: background 0.2s;
+  }
+  .arrival a:hover { background: var(--brass-light); }
+</style>
+</head>
+<body>
+
+<!-- ===== SCENE ===== -->
+<div class="scene">
+
+  <!-- Sky -->
+  <div class="layer" id="lyr-sky">
+    <div class="sun"></div>
+    <div class="cloud c1"><div class="p1"></div><div class="p2"></div><div class="p3"></div></div>
+    <div class="cloud c2"><div class="p1"></div><div class="p2"></div><div class="p3"></div></div>
+    <div class="cloud c3"><div class="p1"></div><div class="p2"></div><div class="p3"></div></div>
+    <div class="cloud c4"><div class="p1"></div><div class="p2"></div><div class="p3"></div></div>
+    <div class="cloud c5"><div class="p1"></div><div class="p2"></div><div class="p3"></div></div>
+    <div class="cloud c6"><div class="p1"></div><div class="p2"></div><div class="p3"></div></div>
+  </div>
+
+  <!-- Distant hills -->
+  <div class="layer hills" id="lyr-hills">
+    <svg viewBox="0 0 4000 400" preserveAspectRatio="none">
+      <path d="M0,400 L0,260 Q120,200 240,230 T480,200 T720,250 T960,180 T1200,220 T1440,170 T1680,240 T1920,200 T2160,160 T2400,230 T2640,210 T2880,180 T3120,240 T3360,200 T3600,170 T3840,220 T4000,200 L4000,400 Z" fill="#5C5040"/>
+      <path d="M0,400 L0,310 Q160,260 320,290 T640,260 T960,310 T1280,250 T1600,300 T1920,260 T2240,310 T2560,280 T2880,260 T3200,300 T3520,270 T3840,290 T4000,280 L4000,400 Z" fill="#3A332A"/>
+    </svg>
+  </div>
+
+  <!-- Fields / trees -->
+  <div class="layer fields" id="lyr-fields">
+    <svg viewBox="0 0 4000 200" preserveAspectRatio="none">
+      <rect x="0" y="120" width="4000" height="80" fill="#221E18"/>
+      <g fill="#1A1410">
+        <!-- repeated tree silhouettes -->
+        <ellipse cx="60"   cy="120" rx="38" ry="38"/>
+        <ellipse cx="180"  cy="124" rx="28" ry="28"/>
+        <ellipse cx="360"  cy="115" rx="44" ry="44"/>
+        <ellipse cx="540"  cy="125" rx="22" ry="22"/>
+        <ellipse cx="720"  cy="120" rx="34" ry="34"/>
+        <ellipse cx="920"  cy="118" rx="40" ry="40"/>
+        <ellipse cx="1120" cy="124" rx="26" ry="26"/>
+        <ellipse cx="1320" cy="118" rx="36" ry="36"/>
+        <ellipse cx="1520" cy="122" rx="30" ry="30"/>
+        <ellipse cx="1740" cy="118" rx="42" ry="42"/>
+        <ellipse cx="1960" cy="124" rx="24" ry="24"/>
+        <ellipse cx="2160" cy="118" rx="38" ry="38"/>
+        <ellipse cx="2360" cy="124" rx="28" ry="28"/>
+        <ellipse cx="2560" cy="116" rx="44" ry="44"/>
+        <ellipse cx="2780" cy="124" rx="22" ry="22"/>
+        <ellipse cx="2980" cy="120" rx="34" ry="34"/>
+        <ellipse cx="3200" cy="118" rx="40" ry="40"/>
+        <ellipse cx="3400" cy="124" rx="26" ry="26"/>
+        <ellipse cx="3600" cy="118" rx="36" ry="36"/>
+        <ellipse cx="3820" cy="122" rx="30" ry="30"/>
+      </g>
+      <!-- station signpost halfway through -->
+      <g transform="translate(1900, 60)" fill="#0E0A07">
+        <rect x="-2" y="0" width="4" height="100"/>
+        <rect x="-50" y="20" width="100" height="22" rx="2" fill="#3D1010" stroke="#9A7230" stroke-width="2"/>
+        <text x="0" y="36" text-anchor="middle" fill="#C4963E" font-family="'IM Fell English SC',serif" font-size="11" letter-spacing="2">TICKENHAM</text>
+      </g>
+    </svg>
+  </div>
+
+  <!-- Ground -->
+  <div class="layer ground" id="lyr-ground"></div>
+
+  <!-- Tracks -->
+  <div class="layer tracks" id="lyr-tracks">
+    <div class="rail top"></div>
+    <div class="rail bot"></div>
+  </div>
+
+  <!-- The Train — caboose enters last; locomotive leads from the left -->
+  <div class="train" id="train">
+
+    <!-- Caboose -->
+    <div class="caboose">
+      <div class="caboose-tag">End of Train</div>
+      <div class="caboose-window">~ Carriages ~</div>
+      <div class="caboose-lantern"></div>
+      <div class="wheels" style="left:10%;right:10%;"><div class="wheel"></div><div class="wheel"></div></div>
+    </div>
+
+    <div class="coupler"></div>
+
+    <!-- Carriage 6 — Visit -->
+    <div class="car">
+      <div class="car-number">Car VI · Final Stop</div>
+      <div class="car-section-tag">Take Your Seat</div>
+      <div class="window">
+        <div class="window-content c-visit">
+          <div class="left">
+            <div class="eyebrow">Find Us</div>
+            <h2 class="display">Come and <em>Take Your Seat</em></h2>
+            <div class="hours">
+              <div class="row">Monday – Sunday <span>9:00am – 4:00pm</span></div>
+              <div class="row">Sunday Roast <span>From 12 noon</span></div>
+              <div class="row">Booking <span>Recommended</span></div>
+            </div>
+          </div>
+          <div class="right">
+            <div class="label">Call to Book</div>
+            <div class="num">01275 401010</div>
+            <div class="addr">100 Clevedon Rd, Tickenham<br/>Clevedon BS21 6RE<br/>Inside Garden Park · Free parking</div>
+            <a class="btn" href="tel:+441275401010">Reserve Your Seat</a>
+          </div>
+        </div>
+      </div>
+      <div class="wheels"><div class="wheel"></div><div class="wheel"></div><div class="wheel"></div><div class="wheel"></div></div>
+    </div>
+    <div class="coupler"></div>
+
+    <div class="coupler"></div>
+
+    <!-- Carriage 5 — Reviews -->
+    <div class="car">
+      <div class="car-number">Car V · In Their Words</div>
+      <div class="car-section-tag">Loved by Locals</div>
+      <div class="window">
+        <div class="window-content c-reviews">
+          <div class="head">
+            <div>
+              <div class="eyebrow">What Guests Say</div>
+              <h2 class="display">Loved by <em style="display:inline;">Locals &amp; Visitors</em></h2>
+            </div>
+            <div class="score">4.6 ★<small>Google · Yell</small></div>
+          </div>
+          <div class="cards">
+            <div class="card">
+              <div class="stars">★★★★★</div>
+              <p class="quote">"The most excellent experience I've ever had. The Sunday dinners were absolutely delicious."</p>
+              <div class="author">— TripAdvisor Guest</div>
+            </div>
+            <div class="card">
+              <div class="stars">★★★★★</div>
+              <p class="quote">"A fabulous cosy place. The setting inside the carriage is truly one-of-a-kind."</p>
+              <div class="author">— Gregory De Tisi, Google</div>
+            </div>
+            <div class="card">
+              <div class="stars">★★★★☆</div>
+              <p class="quote">"Less than £50 for three of us. Sat in the carriage section — loved every moment of it."</p>
+              <div class="author">— TripAdvisor Visitor</div>
+            </div>
+            <div class="card" style="background:var(--burgundy-deep);border-color:var(--burgundy-deep);">
+              <div class="stars" style="color:var(--brass-light);">★★★★★</div>
+              <p class="quote" style="color:var(--cream);font-style:italic;">"The only place he'll agree to have Sunday dinner that isn't made by me — they've won him over."</p>
+              <div class="author" style="color:var(--brass-light);">— A Regular</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="wheels"><div class="wheel"></div><div class="wheel"></div><div class="wheel"></div><div class="wheel"></div></div>
+    </div>
+    <div class="coupler"></div>
+
+    <div class="coupler"></div>
+
+    <!-- Carriage 4 — Sunday Roast -->
+    <div class="car">
+      <div class="car-number">Car IV · The Highlight</div>
+      <div class="car-section-tag">Worth Travelling For</div>
+      <div class="window">
+        <div class="window-content c-roast">
+          <div class="left">
+            <div class="eyebrow">The Highlight</div>
+            <h2 class="display">The Sunday Roast <em>Worth Travelling For</em></h2>
+            <p class="body">Generous portions, perfectly cooked meats, crispy potatoes, proper Yorkshires. A weekly ritual for families across Clevedon and beyond.</p>
+          </div>
+          <div class="right">
+            <div class="cell"><div class="lbl">Served</div><div class="val">Every Sunday</div></div>
+            <div class="cell"><div class="lbl">Time</div><div class="val">From 12 noon</div></div>
+            <div class="cell"><div class="lbl">Booking</div><div class="val">Recommended</div></div>
+            <div class="cell"><div class="lbl">Portions</div><div class="val">Generously sized</div></div>
+          </div>
+        </div>
+      </div>
+      <div class="wheels"><div class="wheel"></div><div class="wheel"></div><div class="wheel"></div><div class="wheel"></div></div>
+    </div>
+    <div class="coupler"></div>
+
+    <div class="coupler"></div>
+
+    <!-- Carriage 3 — Menu -->
+    <div class="car">
+      <div class="car-number">Car III · Dining</div>
+      <div class="car-section-tag">What We Serve</div>
+      <div class="window">
+        <div class="window-content c-menu">
+          <div class="head">
+            <div>
+              <div class="eyebrow">The Menu</div>
+              <h2 class="display">Fresh Food, <em>Made with Care</em></h2>
+            </div>
+            <p class="body">Cooked to order, on the premises, every day. Menu changes seasonally.</p>
+          </div>
+          <div class="grid">
+            <div class="tile">
+              <div class="glyph">☀</div>
+              <h4>All-Day Breakfast</h4>
+              <p class="body">Full English, eggs on toast, ham &amp; egg.</p>
+              <div class="from">From £6</div>
+            </div>
+            <div class="tile">
+              <div class="glyph">⚑</div>
+              <h4>Sunday Roast</h4>
+              <p class="body">Beef, lamb, pork — all the trimmings.</p>
+              <div class="from">From £11</div>
+            </div>
+            <div class="tile">
+              <div class="glyph">◈</div>
+              <h4>Light Lunch</h4>
+              <p class="body">Jackets, pies, lasagne, fish &amp; chips.</p>
+              <div class="from">From £7</div>
+            </div>
+            <div class="tile">
+              <div class="glyph">♨</div>
+              <h4>Cream Tea</h4>
+              <p class="body">Scones, jam, daily cake selection.</p>
+              <div class="from">From £3</div>
+            </div>
+            <div class="tile">
+              <div class="glyph">♜</div>
+              <h4>Hot Drinks</h4>
+              <p class="body">Coffee, pot of tea, hot chocolate.</p>
+              <div class="from">From £2.50</div>
+            </div>
+            <div class="tile">
+              <div class="glyph">◉</div>
+              <h4>Cold Drinks</h4>
+              <p class="body">Shakes, soft drinks, wine by the glass.</p>
+              <div class="from">From £2</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="wheels"><div class="wheel"></div><div class="wheel"></div><div class="wheel"></div><div class="wheel"></div></div>
+    </div>
+    <div class="coupler"></div>
+
+    <div class="coupler"></div>
+
+    <!-- Carriage 2 — Our Story -->
+    <div class="car">
+      <div class="car-number">Car II · The Story</div>
+      <div class="car-section-tag">Living History</div>
+      <div class="window">
+        <div class="window-content c-story">
+          <div class="left">
+            <div class="eyebrow">Our Story</div>
+            <h2 class="display">Dining Inside <em>Living History</em></h2>
+            <p class="body">Tucked within Garden Park Tickenham, our beautifully restored vintage railway carriages offer a one-of-a-kind setting that transports you to another era — the moment you step aboard.</p>
+            <div class="tags">
+              <span class="tag">Dog Friendly</span>
+              <span class="tag">Outdoor Seating</span>
+              <span class="tag">Free Parking</span>
+              <span class="tag">Gluten-Free</span>
+              <span class="tag">Family Friendly</span>
+            </div>
+          </div>
+          <div class="right">
+            <div class="mini-carriage">
+              <div class="mini-body">
+                <div class="mini-window"></div>
+                <div class="mini-window"></div>
+                <div class="mini-window"></div>
+              </div>
+              <div class="mini-wheels">
+                <div class="mini-wheel"></div>
+                <div class="mini-wheel"></div>
+                <div class="mini-wheel"></div>
+                <div class="mini-wheel"></div>
+              </div>
+            </div>
+            <p class="quote">"Sit inside a genuine restored<br/>railway carriage and let<br/>time slow down."</p>
+          </div>
+        </div>
+      </div>
+      <div class="wheels"><div class="wheel"></div><div class="wheel"></div><div class="wheel"></div><div class="wheel"></div></div>
+    </div>
+    <div class="coupler"></div>
+
+    <div class="coupler"></div>
+
+    <!-- Carriage 1 — Welcome / Step Aboard -->
+    <div class="car">
+      <div class="car-number">Car I · 1894</div>
+      <div class="car-section-tag">Step Aboard</div>
+      <div class="window">
+        <div class="window-content c-welcome">
+          <div class="eyebrow">Tickenham · Clevedon</div>
+          <h2 class="display">Carriages <em>Tickenham.</em></h2>
+          <p class="body">A beloved café nestled inside beautifully restored vintage railway carriages at Garden Park, Tickenham. Fresh food, warm welcome, unforgettable setting.</p>
+          <div class="stamp">★ Open daily · 9am – 4pm ★</div>
+        </div>
+      </div>
+      <div class="wheels"><div class="wheel"></div><div class="wheel"></div><div class="wheel"></div><div class="wheel"></div></div>
+    </div>
+    <div class="coupler"></div>
+
+    <div class="coupler"></div>
+
+    <!-- Locomotive -->
+    <div class="loco">
+      <div class="steam">
+        <div class="puff"></div>
+        <div class="puff"></div>
+        <div class="puff"></div>
+        <div class="puff"></div>
+        <div class="puff"></div>
+      </div>
+      <div class="loco-body">
+        <div class="loco-cabin">
+          <div class="loco-cabin-window"></div>
+          <div class="loco-nameplate">№ 1894</div>
+        </div>
+        <div class="loco-boiler"></div>
+        <div class="loco-chimney"></div>
+        <div class="loco-dome"></div>
+        <div class="loco-headlight"></div>
+        <div class="loco-bumper"></div>
+        <div class="loco-cowcatcher"></div>
+      </div>
+      <div class="wheels" style="left: 4%; right: 4%;">
+        <div class="wheel"></div>
+        <div class="wheel big"></div>
+        <div class="wheel big"></div>
+        <div class="wheel"></div>
+      </div>
+    </div>
+    <div class="coupler"></div>
+
+  </div><!-- /train -->
+
+  <!-- Foreground (zips by fastest) -->
+  <div class="layer foreground" id="lyr-foreground"></div>
+
+</div><!-- /scene -->
+
+<!-- Chrome -->
+<div class="brand">Carriages <span>·</span> Tickenham</div>
+<div class="meta">
+  <span>Departing Tickenham</span><span class="dot"></span><span>Track 1</span>
+</div>
+
+<div class="hint" id="hint">
+  Scroll to ride
+  <span class="arrow"></span>
+</div>
+
+<div class="progress">
+  <div class="progress-line">
+    <div class="progress-marker" id="marker"></div>
+  </div>
+  <div class="progress-label" id="progress-label">Departing</div>
+</div>
+
+<div class="arrival" id="arrival">
+  <div class="eyebrow">End of the Line · Tickenham</div>
+  <h3>All Aboard for<em>Something Wonderful.</em></h3>
+  <p>No rush, no fuss — just great food in a place unlike anywhere else.</p>
+  <a href="tel:+441275401010">Call: 01275 401010</a>
+</div>
+
+<script>
+  // ============================================================
+  //  Journey controller — virtual horizontal scroll
+  // ============================================================
+  const train       = document.getElementById('train');
+  const lyrSky      = document.getElementById('lyr-sky');
+  const lyrHills    = document.getElementById('lyr-hills');
+  const lyrFields   = document.getElementById('lyr-fields');
+  const lyrGround   = document.getElementById('lyr-ground');
+  const lyrTracks   = document.getElementById('lyr-tracks');
+  const lyrForeground = document.getElementById('lyr-foreground');
+  const marker      = document.getElementById('marker');
+  const progressLabel = document.getElementById('progress-label');
+  const hint        = document.getElementById('hint');
+  const arrival     = document.getElementById('arrival');
+
+  // Build the foreground (grass blades + occasional posts) procedurally,
+  // sized to be 4x as wide as the viewport so we have plenty to scroll past.
+  (function buildForeground(){
+    const total = window.innerWidth * 4;
+    let html = '';
+    for (let x = 0; x < total; x += 18) {
+      const h = 12 + Math.random() * 18;
+      const o = 0.35 + Math.random() * 0.5;
+      html += `<div class="blade" style="left:${x}px;height:${h}px;opacity:${o};transform:skewX(${-20+Math.random()*16}deg)"></div>`;
+    }
+    for (let x = 600; x < total; x += 1100 + Math.random()*400) {
+      html += `<div class="post" style="left:${x}px"><div class="lamp"></div></div>`;
+    }
+    lyrForeground.innerHTML = html;
+  })();
+
+  // Lay sleepers across the tracks element
+  (function buildTies(){
+    const total = window.innerWidth * 4;
+    let html = '<div class="rail top"></div><div class="rail bot"></div>';
+    for (let x = 0; x < total; x += 90) {
+      html += `<div class="tie" style="left:${x}px"></div>`;
+    }
+    lyrTracks.innerHTML = html;
+  })();
+
+  // Star poles removed (were rendering as dark streaks in the sky layer)
+
+  // ----- Scroll state -----
+  let scrollX = 0;
+  let targetScrollX = 0;
+  let maxScroll = 0;
+
+  function recomputeMax() {
+    const trainWidth = train.scrollWidth;
+    // We want the train to fully cross the viewport: start fully off-left, end fully off-right.
+    // Stretch the scroll distance so each compartment lingers ~1000–1200px.
+    const baseCross = trainWidth + window.innerWidth;
+    // Dilation factor — bigger = slower passage.
+    maxScroll = baseCross * 0.95;
+  }
+  recomputeMax();
+  window.addEventListener('resize', () => { recomputeMax(); });
+
+  // Wheel = primary input
+  let hintHidden = false;
+  window.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    targetScrollX += (e.deltaY || 0) + (e.deltaX || 0);
+    targetScrollX = clamp(targetScrollX, 0, maxScroll);
+    hideHint();
+  }, { passive: false });
+
+  // Touch drag
+  let touchStartX = 0, touchStartScroll = 0;
+  window.addEventListener('touchstart', (e) => {
+    touchStartX = e.touches[0].clientX;
+    touchStartScroll = targetScrollX;
+  }, { passive: true });
+  window.addEventListener('touchmove', (e) => {
+    e.preventDefault();
+    const dx = e.touches[0].clientX - touchStartX;
+    targetScrollX = clamp(touchStartScroll - dx * 2.4, 0, maxScroll);
+    hideHint();
+  }, { passive: false });
+
+  // Mouse drag (desktop fallback)
+  let mouseDown = false, mouseStartX = 0, mouseStartScroll = 0;
+  window.addEventListener('mousedown', (e) => {
+    if (e.target.closest('a, button')) return;
+    mouseDown = true;
+    mouseStartX = e.clientX;
+    mouseStartScroll = targetScrollX;
+    document.documentElement.classList.add('dragging');
+  });
+  window.addEventListener('mousemove', (e) => {
+    if (!mouseDown) return;
+    const dx = e.clientX - mouseStartX;
+    targetScrollX = clamp(mouseStartScroll - dx * 2.4, 0, maxScroll);
+    hideHint();
+  });
+  window.addEventListener('mouseup', () => {
+    mouseDown = false;
+    document.documentElement.classList.remove('dragging');
+  });
+
+  // Keys
+  window.addEventListener('keydown', (e) => {
+    const step = window.innerWidth * 0.5;
+    if (e.key === 'ArrowRight' || e.key === 'PageDown' || e.key === ' ') {
+      e.preventDefault();
+      targetScrollX = clamp(targetScrollX + step, 0, maxScroll);
+      hideHint();
+    } else if (e.key === 'ArrowLeft' || e.key === 'PageUp') {
+      e.preventDefault();
+      targetScrollX = clamp(targetScrollX - step, 0, maxScroll);
+    } else if (e.key === 'Home') {
+      targetScrollX = 0;
+    } else if (e.key === 'End') {
+      targetScrollX = maxScroll;
+    }
+  });
+
+  function hideHint() {
+    if (hintHidden) return;
+    hintHidden = true;
+    hint.classList.add('hidden');
+  }
+  function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+
+  // Segment labels for the progress bar
+  const segments = [
+    [0.00, 'Departing'],
+    [0.10, 'Step Aboard'],
+    [0.25, 'Our Story'],
+    [0.40, 'The Menu'],
+    [0.55, 'Sunday Roast'],
+    [0.70, 'In Their Words'],
+    [0.85, 'Find Us'],
+    [0.97, 'Arrived'],
+  ];
+  function labelForProgress(p) {
+    let label = segments[0][1];
+    for (const [t, l] of segments) if (p >= t) label = l;
+    return label;
+  }
+
+  // ----- Persist scroll position across reloads (designer convenience) -----
+  const SCROLL_KEY = 'carriages.journey.scrollX';
+  const saved = parseFloat(localStorage.getItem(SCROLL_KEY));
+  if (!Number.isNaN(saved) && saved > 0) {
+    scrollX = targetScrollX = clamp(saved, 0, maxScroll);
+    if (saved > 50) hideHint();
+  }
+
+  // ----- Main loop -----
+  function tick() {
+    // Smooth follow
+    scrollX += (targetScrollX - scrollX) * 0.10;
+    if (Math.abs(targetScrollX - scrollX) < 0.5) scrollX = targetScrollX;
+
+    // Persist (throttled)
+    if (Math.random() < 0.05) {
+      try { localStorage.setItem(SCROLL_KEY, String(scrollX)); } catch (_) {}
+    }
+
+    // Parallax — everything shifts LEFT as scroll progresses
+    lyrSky.style.transform        = `translate3d(${-scrollX * 0.08}px, 0, 0)`;
+    lyrHills.style.transform      = `translate3d(${-scrollX * 0.18}px, 0, 0)`;
+    lyrFields.style.transform     = `translate3d(${-scrollX * 0.42}px, 0, 0)`;
+    lyrGround.style.transform     = `translate3d(${-scrollX * 0.55}px, 0, 0)`;
+    lyrTracks.style.transform     = `translate3d(${-((scrollX * 0.65) % 180)}px, 0, 0)`;
+    lyrForeground.style.transform = `translate3d(${-scrollX * 1.2}px, 0, 0)`;
+
+    // Train motion — enter from left, exit to right
+    const trainWidth = train.scrollWidth;
+    const vw = window.innerWidth;
+    const progress = maxScroll > 0 ? (scrollX / maxScroll) : 0;
+    const trainX = -trainWidth + progress * (vw + trainWidth);
+
+    // Subtle vertical bob to suggest forward motion
+    const bob = Math.sin(scrollX * 0.012) * 1.2;
+    train.style.transform = `translate3d(${trainX}px, ${bob}px, 0)`;
+
+    // Progress UI
+    marker.style.left = (progress * 100) + '%';
+    progressLabel.textContent = labelForProgress(progress);
+
+    // Arrival card slides in once the locomotive has cleared the screen
+    if (progress > 0.96) arrival.classList.add('shown');
+    else arrival.classList.remove('shown');
+
+    requestAnimationFrame(tick);
+  }
+  tick();
+</script>
+
+</body>
+</html>
